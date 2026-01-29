@@ -176,6 +176,12 @@ export class LiveSplit extends React.Component<Props, State> {
     private rightClickEvent: Option<EventListenerObject>;
     private resizeEvent: Option<EventListenerObject>;
 
+    // audio playback definitions
+    private audioCtx: AudioContext | null = null;
+    private audioOscillator: OscillatorNode | null = null;
+    private audioMetronomeTimerId: number | null = null;
+    private audioActiveSplitIndex: number | null = null;
+
     constructor(props: Props) {
         super(props);
 
@@ -338,6 +344,19 @@ export class LiveSplit extends React.Component<Props, State> {
         this.state.commandSink[Symbol.dispose]();
         this.state.layout[Symbol.dispose]();
         this.state.layoutState[Symbol.dispose]();
+
+        // Kill split audio
+        try {
+            this.stopSplitAudio();
+        } catch { }
+
+        // Kill audio context
+        if (this.audioCtx != null) {
+            try {
+                this.audioCtx.close();
+            } catch { }
+            this.audioCtx = null;
+        }
 
         this.isDesktopQuery.removeEventListener(
             "change",
@@ -1029,9 +1048,113 @@ export class LiveSplit extends React.Component<Props, State> {
 
     private currentSplitChanged(): void {
         if (this.state != null) {
-            this.setState({
-                currentSplitIndex: this.state.commandSink.currentSplitIndex(),
-            });
+            const index = this.state.commandSink.currentSplitIndex();
+            this.setState({ currentSplitIndex: index }, () => this.updateSplitAudio());
+        }
+    }
+
+    private stopSplitAudio(): void {
+        // Stop any running metronome interval
+        if (this.audioMetronomeTimerId != null) {
+            try {
+                window.clearInterval(this.audioMetronomeTimerId);
+            } catch { }
+            this.audioMetronomeTimerId = null;
+        }
+
+        // Stop WebAudio oscillator if present
+        if (this.audioOscillator != null) {
+            try {
+                this.audioOscillator.stop();
+            } catch { }
+            this.audioOscillator.disconnect();
+            this.audioOscillator = null;
+        }
+
+        this.audioActiveSplitIndex = null;
+    }
+
+    private updateSplitAudio(): void {
+        // Determine the currently active split index and its name.
+        const index = this.state.commandSink.currentSplitIndex();
+        const run = this.state.commandSink.getRun();
+
+        if (this.audioActiveSplitIndex === index && this.audioMetronomeTimerId != null) {
+            return; // already running from the same split -- does this happen?
+        }
+
+        this.stopSplitAudio();  // reset audio in case consecutive metronome splits
+
+        if (index < 0 || index >= run.len()) {
+            return;
+        }
+
+        let name = "";
+        try {
+            name = run.segment(index).name();
+        } catch {
+            name = "";
+        }
+
+        const m = name.match(/%(\d+)%/);
+        if (!m) {
+            this.stopSplitAudio();
+            return;
+        }
+
+        let bpm = 81;  // ryan's default pier 3 BPM
+        try {
+            const parsed = parseInt(m[1], 10);  // for tempo given by strings like %60%, will set to 60 BPM
+            if (!Number.isNaN(parsed) && parsed > 0) {
+                bpm = parsed;
+            }
+        } catch { }  // errors in parsing will silently default to 81 BPM
+
+        try {
+            const intervalMs = 60000 / bpm;
+
+            let ctx = this.audioCtx;
+            if (ctx == null) {
+                ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                this.audioCtx = ctx;
+            }
+            ctx.resume().catch(() => { });
+
+            const triggerClick = () => {
+                try {
+                    const now = ctx.currentTime;
+                    const clickOsc = ctx.createOscillator();
+                    const clickGain = ctx.createGain();
+                    clickOsc.type = "square";
+                    clickOsc.frequency.value = 1500;
+                    // envelope
+                    clickGain.gain.setValueAtTime(0.0001, now);
+                    clickGain.gain.exponentialRampToValueAtTime(1.0, now + 0.001);
+                    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+
+                    clickOsc.connect(clickGain);
+                    clickGain.connect(ctx.destination);
+                    clickOsc.start(now);
+                    clickOsc.stop(now + 0.09);
+
+                    setTimeout(() => {
+                        try {
+                            clickOsc.disconnect();
+                        } catch { }
+                        try {
+                            clickGain.disconnect();
+                        } catch { }
+                    }, 200);
+                } catch { }
+            };
+
+            // Immediate first click
+            triggerClick();
+
+            const timerId = window.setInterval(triggerClick, intervalMs);
+            this.audioMetronomeTimerId = timerId as unknown as number;
+            this.audioActiveSplitIndex = index;
+        } catch {
         }
     }
 
