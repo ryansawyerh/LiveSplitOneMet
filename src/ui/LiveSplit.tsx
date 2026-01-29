@@ -322,6 +322,12 @@ export class LiveSplit extends React.Component<Props, State> {
                 this.notifyAboutUpdate,
             );
         }
+
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            this.audioCtx = ctx;
+            ctx.resume().catch(() => {});  // In case run in browser and is auto-suspended
+        } catch {}
     }
 
     public componentDidUpdate() {
@@ -1114,7 +1120,7 @@ export class LiveSplit extends React.Component<Props, State> {
             const intervalMs = 60000.0 / bpm;  // ms per beat
 
             let ctx = this.audioCtx;
-            if (ctx == null) {
+            if (ctx == null) {   // **Should** be created earlier, but who knows
                 ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
                 this.audioCtx = ctx;
             }

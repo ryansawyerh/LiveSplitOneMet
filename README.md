@@ -1,6 +1,8 @@
-# <img src="https://raw.githubusercontent.com/LiveSplit/LiveSplitOne/master/src/assets/icon.svg" alt="LiveSplit" height="42" align="top"/> LiveSplit One
+# <img src="https://raw.githubusercontent.com/LiveSplit/LiveSplitOne/master/src/assets/icon.svg" alt="LiveSplit" height="42" align="top"/> LiveSplit One (Met)
 
-[![Build Status](https://github.com/LiveSplit/LiveSplitOne/workflows/CI/badge.svg)](https://github.com/LiveSplit/LiveSplitOne/actions)
+[![Build Status](https://github.com/ryansawyerh/LiveSplitOneMet/workflows/CI/badge.svg)](https://github.com/ryansawyerh/LiveSplitOneMet/actions)
+
+> This version of LiveSplitOne has a metronome module, accessible by giving a split a name that contains `%TEMPO%` such as `%81% Springs`. In that example, an 81 BPM metronome will play for the duration of that split.
 
 LiveSplit One is a version of LiveSplit that uses the multiplatform
 [livesplit-core](https://github.com/LiveSplit/livesplit-core) library and web
