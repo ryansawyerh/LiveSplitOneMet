@@ -1096,7 +1096,7 @@ export class LiveSplit extends React.Component<Props, State> {
             name = "";
         }
 
-        const m = name.match(/%(\d+)%/);
+        const m = name.match(/%(.+?)%/);
         if (!m) {
             this.stopSplitAudio();
             return;
@@ -1111,7 +1111,7 @@ export class LiveSplit extends React.Component<Props, State> {
         } catch { }  // errors in parsing will silently default to 81 BPM
 
         try {
-            const intervalMs = 60000 / bpm;
+            const intervalMs = 60000.0 / bpm;  // ms per beat
 
             let ctx = this.audioCtx;
             if (ctx == null) {
@@ -1120,6 +1120,9 @@ export class LiveSplit extends React.Component<Props, State> {
             }
             ctx.resume().catch(() => { });
 
+            const intervalSec = intervalMs / 1000.0;  // seconds per beat
+            const clickDuration = Math.min(0.09, intervalSec * 0.5);
+
             const triggerClick = () => {
                 try {
                     const now = ctx.currentTime;
@@ -1127,15 +1130,15 @@ export class LiveSplit extends React.Component<Props, State> {
                     const clickGain = ctx.createGain();
                     clickOsc.type = "square";
                     clickOsc.frequency.value = 1500;
-                    // envelope
+                    // envelope sized to tempo
                     clickGain.gain.setValueAtTime(0.0001, now);
-                    clickGain.gain.exponentialRampToValueAtTime(1.0, now + 0.001);
-                    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+                    clickGain.gain.linearRampToValueAtTime(1.0, now + 0.001);
+                    clickGain.gain.linearRampToValueAtTime(0.0001, now + clickDuration);
 
                     clickOsc.connect(clickGain);
                     clickGain.connect(ctx.destination);
                     clickOsc.start(now);
-                    clickOsc.stop(now + 0.09);
+                    clickOsc.stop(now + clickDuration + 0.01);
 
                     setTimeout(() => {
                         try {
@@ -1144,7 +1147,7 @@ export class LiveSplit extends React.Component<Props, State> {
                         try {
                             clickGain.disconnect();
                         } catch { }
-                    }, 200);
+                    }, Math.ceil((clickDuration + 0.01) * 1000) + 20);  // this is for timeout, wont affect usual timing
                 } catch { }
             };
 
